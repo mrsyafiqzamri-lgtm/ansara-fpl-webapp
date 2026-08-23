@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ansara-fpl-webapp
+    runtime: docker
+    autoDeploy: true
+    envVars:
+      - key: ASSET_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
