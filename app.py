@@ -373,6 +373,47 @@ def group_standings_pdf(gw, group_rows):
     c.save()
     return out.getvalue()
 
+
+def individual_ranking_pdf(gw, individual_rows):
+    header = ["RANK", "ENTRY ID", "FULL NAME", "CHAPTER", "MANAGER NAME FPL", "TEAM NAME FPL", f"GW{gw} SCORE", "TOTAL SCORE"]
+    rows_per_page = 99
+    pages = [individual_rows[i:i + rows_per_page] for i in range(0, len(individual_rows), rows_per_page)]
+    row_h = 6.73
+    col_widths = [26.0, 31.0, 121.0, 72.0, 76.0, 72.0, 34.0, 36.0]
+    x = 72.0
+    y_top = 737.64
+
+    out = io.BytesIO()
+    c = canvas.Canvas(out, pagesize=letter)
+    for page_idx, body_rows in enumerate(pages):
+        rows = [header] + body_rows
+        y = y_top
+        for ri, row in enumerate(rows):
+            is_header = ri == 0
+            if is_header:
+                c.setFillColor(colors.HexColor(HEADER_BLUE))
+                c.rect(x, y-row_h, sum(col_widths), row_h, stroke=0, fill=1)
+            cx = x
+            for val, cw in zip(row, col_widths):
+                c.setStrokeColor(colors.black)
+                c.setLineWidth(0.35)
+                c.rect(cx, y-row_h, cw, row_h, stroke=1, fill=0)
+                text = "" if val is None else str(val)
+                fn = BOLD_FONT if is_header else REG_FONT
+                fs = 4.05 if is_header else 4.10
+                fs = _fit_font(text, fn, fs, cw-2.0, 2.8)
+                c.setFont(fn, fs)
+                c.setFillColor(colors.white if is_header else colors.black)
+                tx = cx + (cw - stringWidth(text, fn, fs))/2
+                ty = y-row_h + (row_h-fs)*0.5 + 0.8
+                c.drawString(tx, ty, text)
+                cx += cw
+            y -= row_h
+        if page_idx < len(pages)-1:
+            c.showPage()
+    c.save()
+    return out.getvalue()
+
 def group_details_pdf(gw, detail_rows):
     header = ["GROUP RANK", "CHAPTER", "TOP 5 POSITION", "ENTRY ID", "FULL NAME", "MANAGER NAME FPL", "TEAM NAME FPL", f"GW{gw} SCORE"]
     pages = [detail_rows[:99], detail_rows[99:155]]
@@ -455,17 +496,20 @@ if st.button("RUN EXTRACTOR", type="primary", use_container_width=True):
 
         status.write("Generating Excel and PDFs...")
         xlsx_bytes = generate_xlsx(template_bytes, gw, individual_rows, group_rows, detail_rows)
+        individual_pdf = individual_ranking_pdf(gw, individual_rows)
         group_pdf = group_standings_pdf(gw, group_rows)
         details_pdf = group_details_pdf(gw, detail_rows)
 
         names = {
             "xlsx": f"ANSARA_FPL_OFFICIAL_RANKING_GW{gw}.xlsx",
+            "individual": f"GW{gw} INDIVIDUAL RANKING.pdf",
             "group": f"GW{gw} GROUP STANDINGS.pdf",
             "details": f"GW{gw} GROUP STANDINGS DETAILS.pdf",
         }
         zbuf = io.BytesIO()
         with zipfile.ZipFile(zbuf, "w", compression=zipfile.ZIP_DEFLATED) as z:
             z.writestr(names["xlsx"], xlsx_bytes)
+            z.writestr(names["individual"], individual_pdf)
             z.writestr(names["group"], group_pdf)
             z.writestr(names["details"], details_pdf)
 
@@ -473,6 +517,7 @@ if st.button("RUN EXTRACTOR", type="primary", use_container_width=True):
             "gw": gw,
             "names": names,
             "xlsx": xlsx_bytes,
+            "individual": individual_pdf,
             "group": group_pdf,
             "details": details_pdf,
             "zip": zbuf.getvalue(),
@@ -488,6 +533,7 @@ out = st.session_state.outputs
 if out:
     st.subheader(f"Gameweek {out['gw']} files")
     st.download_button("Download Excel", data=out["xlsx"], file_name=out["names"]["xlsx"], mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+    st.download_button("Download Individual Ranking PDF", data=out["individual"], file_name=out["names"]["individual"], mime="application/pdf", use_container_width=True)
     st.download_button("Download Group Standings PDF", data=out["group"], file_name=out["names"]["group"], mime="application/pdf", use_container_width=True)
     st.download_button("Download Group Details PDF", data=out["details"], file_name=out["names"]["details"], mime="application/pdf", use_container_width=True)
-    st.download_button("Download All 3 Files (.zip)", data=out["zip"], file_name=f"ANSARA_FPL_GW{out['gw']}_FILES.zip", mime="application/zip", use_container_width=True)
+    st.download_button("Download All 4 Files (.zip)", data=out["zip"], file_name=f"ANSARA_FPL_GW{out['gw']}_FILES.zip", mime="application/zip", use_container_width=True)
